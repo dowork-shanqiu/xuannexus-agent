@@ -18,6 +18,21 @@ type Config struct {
 	Log          LogConfig          `yaml:"log"`
 	FileTransfer FileTransferConfig `yaml:"file_transfer"`
 	Certificate  CertificateConfig  `yaml:"certificate"`
+	Upgrade      UpgradeConfig      `yaml:"upgrade"`
+}
+
+// UpgradeConfig holds auto-upgrade configuration
+type UpgradeConfig struct {
+	// Enabled 是否启用自动升级检测，默认 true
+	Enabled bool `yaml:"enabled"`
+	// Schedule cron 表达式，用于定时检测新版本，默认 "0 3 * * *"（每日凌晨 3 点）
+	Schedule string `yaml:"schedule"`
+	// MirrorURL 升级镜像地址，为空时使用 GitHub Release API；
+	// 适用于中国大陆等无法直接访问 GitHub 的网络环境。
+	// 镜像应提供与 GitHub Release 相同的目录结构：{mirror_url}/{tag}/xuannexus-agent-{os}-{arch}
+	MirrorURL string `yaml:"mirror_url"`
+	// GithubRepo GitHub 仓库地址，用于从 GitHub Release 检测与下载，默认 "dowork-shanqiu/xuannexus-agent"
+	GithubRepo string `yaml:"github_repo"`
 }
 
 // ServerConfig holds server connection configuration
@@ -102,6 +117,11 @@ func Load(configPath string) (*Config, error) {
 		},
 		Certificate: CertificateConfig{
 			StorageDir: "./certs", // Default certificate storage directory
+		},
+		Upgrade: UpgradeConfig{
+			Enabled:    true,
+			Schedule:   "0 3 * * *", // 默认每日凌晨 3 点检测
+			GithubRepo: "dowork-shanqiu/xuannexus-agent",
 		},
 	}
 
@@ -259,6 +279,15 @@ file_transfer:
 # 证书存储目录
 certificate:
   storage_dir: "./certs"
+
+# 自动升级配置
+upgrade:
+  enabled: true                                    # 是否启用自动升级检测
+  schedule: "0 3 * * *"                            # cron 表达式，默认每日凌晨 3 点检测
+  mirror_url: ""                                   # 升级镜像地址（留空则使用 GitHub Release）
+                                                   # 中国大陆用户可配置镜像以加速下载
+                                                   # 镜像目录结构：{mirror_url}/{tag}/xuannexus-agent-{os}-{arch}
+  github_repo: "dowork-shanqiu/xuannexus-agent"    # GitHub 仓库（owner/repo）
 `
 }
 

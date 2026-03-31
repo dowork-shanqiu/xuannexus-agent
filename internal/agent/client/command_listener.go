@@ -24,11 +24,17 @@ type CommandListener struct {
 	token           string
 	sandboxExecutor *SandboxExecutor // Sandbox executor for secure command execution
 	collector       MetricsCollector // System metrics collector
+	updateChecker   UpdateChecker    // Update checker for server-triggered upgrades
 }
 
 // MetricsCollector interface for collecting system metrics
 type MetricsCollector interface {
 	CollectDynamicMetrics() *pb.DynamicMetrics
+}
+
+// UpdateChecker interface for triggering update checks
+type UpdateChecker interface {
+	TriggerCheck(ctx context.Context) (bool, error)
 }
 
 // NewCommandListener creates a new command listener
@@ -54,6 +60,11 @@ func NewCommandListener(client *GRPCClient, agentID, token string, logger *zap.L
 		sandboxExecutor: sandboxExecutor,
 		collector:       collector,
 	}
+}
+
+// SetUpdateChecker sets the update checker for server-triggered upgrades
+func (cl *CommandListener) SetUpdateChecker(checker UpdateChecker) {
+	cl.updateChecker = checker
 }
 
 // Start starts listening for commands from server
@@ -179,6 +190,12 @@ func (cl *CommandListener) executeCommand(ctx context.Context, cmdReq *pb.Comman
 	// Check for special file download command
 	if cmdReq.Command == "__download_file__" {
 		cl.handleFileDownload(ctx, cmdReq, stream, executionID, startTime)
+		return
+	}
+
+	// Check for special update check command
+	if cmdReq.Command == "__check_update__" {
+		cl.handleCheckUpdate(ctx, stream, executionID, startTime)
 		return
 	}
 
@@ -349,6 +366,46 @@ func (cl *CommandListener) executeCommand(ctx context.Context, cmdReq *pb.Comman
 	cl.reportCompletion(stream, executionID, status, exitCode, stdout.String(), stderr.String(), errorMsg, duration)
 }
 
+
+// handleCheckUpdate handles the special __check_update__ command from server
+func (cl *CommandListener) handleCheckUpdate(ctx context.Context, stream pb.AgentService_ExecuteCommandClient, executionID string, startTime time.Time) {
+	if cl.updateChecker == nil {
+		cl.logger.Warn("收到升级检查指令，但升级功能未启用",
+			zap.String("execution_id", executionID))
+		cl.reportCompletion(stream, executionID, "failed", 1, "", "",
+			"升级功能未启用", time.Since(startTime))
+		return
+	}
+
+	cl.logger.Info("收到服务端升级检查指令",
+		zap.String("execution_id", executionID))
+
+	upgraded, err := cl.updateChecker.TriggerCheck(ctx)
+	duration := time.Since(startTime)
+
+	if err != nil {
+		cl.logger.Error("升级检查失败",
+			zap.String("execution_id", executionID),
+			zap.Error(err))
+		cl.reportCompletion(stream, executionID, "failed", 1, "", "",
+			fmt.Sprintf("升级检查失败: %v", err), duration)
+		return
+	}
+
+	var stdout string
+	if upgraded {
+		stdout = "已检测到新版本并完成升级，agent 即将重启"
+	} else {
+		stdout = "当前已是最新版本，无需升级"
+	}
+
+	cl.logger.Info("升级检查完成",
+		zap.String("execution_id", executionID),
+		zap.Bool("upgraded", upgraded),
+		zap.String("result", stdout))
+
+	cl.reportCompletion(stream, executionID, "completed", 0, stdout, "", "", duration)
+}
 
 // handleFileDownload handles the special __download_file__ command
 func (cl *CommandListener) handleFileDownload(ctx context.Context, cmdReq *pb.CommandRequest, stream pb.AgentService_ExecuteCommandClient, executionID string, startTime time.Time) {

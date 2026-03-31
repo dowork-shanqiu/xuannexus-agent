@@ -25,6 +25,7 @@ type GRPCClient struct {
 	conn         *grpc.ClientConn
 	client       pb.AgentServiceClient
 	metricsCache *MetricsCache
+	version      string // Agent version, included in all authenticated requests
 }
 
 // NewGRPCClient creates a new gRPC client
@@ -35,6 +36,11 @@ func NewGRPCClient(cfg *config.Config, logger *zap.Logger) (*GRPCClient, error) 
 		logger:       logger,
 		metricsCache: NewMetricsCache(100, logger), // Cache up to 100 metrics
 	}, nil
+}
+
+// SetVersion sets the agent version to be included in all authenticated requests
+func (c *GRPCClient) SetVersion(version string) {
+	c.version = version
 }
 
 // Connect establishes a connection to the server
@@ -243,8 +249,9 @@ func (c *GRPCClient) flushCachedMetrics() {
 // withAuth adds authentication metadata to context
 func (c *GRPCClient) withAuth(ctx context.Context) context.Context {
 	md := metadata.New(map[string]string{
-		"agent-id": c.cfg.Registration.AgentID,
-		"token":    c.cfg.Registration.Token,
+		"agent-id":      c.cfg.Registration.AgentID,
+		"token":         c.cfg.Registration.Token,
+		"agent-version": c.version,
 	})
 	return metadata.NewOutgoingContext(ctx, md)
 }
