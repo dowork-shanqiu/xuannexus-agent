@@ -1,0 +1,28 @@
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go
+go.work
+go.work.sum
+
+# Build artifacts
+bin/
+build/
+/agent
+cmd/agent/agent
+
+# Certificates (generated)
+/certs/
+
+# Temporary files
+tmp/
+*.bak
+
+# Local config (may contain credentials)
+configs/agent-local.yaml

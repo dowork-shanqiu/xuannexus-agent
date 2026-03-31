@@ -1,0 +1,40 @@
+# XuanNexus Agent Configuration
+
+# Server connection settings
+server:
+  address: "localhost:9090"  # gRPC server address
+  timeout: 30s               # Connection timeout
+  tls:
+    enable: false                # Enable TLS
+    ca_cert: ""                  # CA certificate file (for verifying server certificate)
+    client_cert: ""              # Client certificate file (required for mTLS)
+    client_key: ""               # Client key file (required for mTLS)
+    insecure_skip_verify: false  # Skip TLS verification (not recommended for production)
+
+# Agent registration settings (NEW MECHANISM)
+# 预创建Agent后，将获得的注册密钥填入下方
+registration:
+  key: ""                    # Registration key from pre-created agent (REQUIRED for first-time registration)
+
+# Heartbeat settings
+heartbeat:
+  interval: 30s              # Heartbeat interval
+
+# Metrics reporting settings
+metrics:
+  report_interval: 60s       # Metrics report interval
+
+# Logging settings
+log:
+  level: "info"              # Log level: debug, info, warn, error
+  format: "console"          # Log format: console, json
+
+# File transfer settings
+file_transfer:
+  chunk_size: 1048576        # Chunk size for file transfer (1MB)
+  temp_dir: "/tmp/xuannexus-agent"  # Temporary directory for downloads
+
+# Agent credentials (automatically saved after registration)
+# These fields are automatically filled after successful registration
+# agent_id: ""
+# token: ""
