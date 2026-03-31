@@ -1678,7 +1678,7 @@ const file_api_proto_agent_agent_proto_rawDesc = "" +
 	"\n" +
 	"UploadFile\x12\x10.agent.FileChunk\x1a\x1b.agent.FileTransferResponse(\x01\x12>\n" +
 	"\fDownloadFile\x12\x1a.agent.FileDownloadRequest\x1a\x10.agent.FileChunk0\x01\x12B\n" +
-	"\x0eExecuteCommand\x12\x15.agent.CommandMessage\x1a\x15.agent.CommandMessage(\x010\x01B8Z6repo.yetoa.com/yetoa/xuannexus/api/proto/agent;agentpbb\x06proto3"
+	"\x0eExecuteCommand\x12\x15.agent.CommandMessage\x1a\x15.agent.CommandMessage(\x010\x01BCZAgithub.com/dowork-shanqiu/xuannexus-agent/api/proto/agent;agentpbb\x06proto3"
 
 var (
 	file_api_proto_agent_agent_proto_rawDescOnce sync.Once
