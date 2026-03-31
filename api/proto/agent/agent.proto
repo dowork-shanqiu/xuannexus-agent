@@ -1,0 +1,210 @@
+syntax = "proto3";
+
+package agent;
+
+option go_package = "github.com/dowork-shanqiu/xuannexus-agent/api/proto/agent;agentpb";
+
+// AgentService defines the gRPC service for agent-server communication
+service AgentService {
+  // Register registers an agent with the server using a registration key
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  
+  // Heartbeat sends periodic heartbeat to maintain connection
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  
+  // ReportStaticInfo reports static host information (collected once at startup)
+  rpc ReportStaticInfo(StaticInfoRequest) returns (StaticInfoResponse);
+  
+  // ReportDynamicMetrics reports dynamic system metrics
+  rpc ReportDynamicMetrics(DynamicMetricsRequest) returns (DynamicMetricsResponse);
+  
+  // UploadFile uploads a file from agent to server
+  rpc UploadFile(stream FileChunk) returns (FileTransferResponse);
+  
+  // DownloadFile downloads a file from server to agent
+  rpc DownloadFile(FileDownloadRequest) returns (stream FileChunk);
+  
+  // ExecuteCommand establishes a bidirectional stream for command execution
+  // Server sends CommandRequest, Agent sends CommandOutput (including completion reports)
+  rpc ExecuteCommand(stream CommandMessage) returns (stream CommandMessage);
+}
+
+// RegisterRequest contains agent registration information (new mechanism)
+message RegisterRequest {
+  string registration_key = 1;  // Registration key from pre-created agent
+  string os_type = 2;            // Operating system type (windows/linux/darwin) - auto-detected
+  string agent_version = 3;      // Agent version (from build-time injection)
+}
+
+// RegisterResponse contains registration result (new mechanism)
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+  string agent_id = 3;       // Unique agent ID assigned by server
+  string token = 4;          // Authentication token for subsequent requests
+  string hostname = 5;       // Hostname from pre-created agent
+  string cloud_provider = 6; // Cloud provider from pre-created agent
+  string region = 7;         // Region from pre-created agent
+}
+
+// HeartbeatRequest contains heartbeat information
+message HeartbeatRequest {
+  string agent_id = 1;
+  string token = 2;
+  int64 timestamp = 3;  // Unix timestamp in seconds
+  string status = 4;     // Agent status (running/idle/busy)
+}
+
+// HeartbeatResponse acknowledges heartbeat
+message HeartbeatResponse {
+  bool success = 1;
+  string message = 2;
+  int64 server_timestamp = 3;
+}
+
+// StaticInfoRequest contains static system information
+message StaticInfoRequest {
+  string agent_id = 1;
+  string token = 2;
+  StaticInfo info = 3;
+}
+
+// StaticInfo contains static host information
+message StaticInfo {
+  string hostname = 1;
+  string os_type = 2;       // windows/linux/darwin
+  string os_version = 3;    // OS version string
+  string architecture = 4;  // amd64/arm64/etc
+  int32 cpu_cores = 5;      // Number of CPU cores
+  string cpu_model = 6;     // CPU model name
+  int64 total_memory = 7;   // Total memory in bytes
+  int64 total_disk = 8;     // Total disk space in bytes
+  repeated NetworkInterface network_interfaces = 9;
+  string kernel_version = 10;
+  int64 boot_time = 11;     // Boot time as Unix timestamp
+}
+
+// NetworkInterface represents a network interface
+message NetworkInterface {
+  string name = 1;
+  repeated string ip_addresses = 2;
+  string mac_address = 3;
+  int64 mtu = 4;
+}
+
+// StaticInfoResponse acknowledges static info report
+message StaticInfoResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// DynamicMetricsRequest contains dynamic system metrics
+message DynamicMetricsRequest {
+  string agent_id = 1;
+  string token = 2;
+  DynamicMetrics metrics = 3;
+}
+
+// DynamicMetrics contains dynamic system metrics
+message DynamicMetrics {
+  int64 timestamp = 1;        // Unix timestamp in seconds
+  double cpu_usage_percent = 2;
+  int64 memory_used = 3;      // Used memory in bytes
+  int64 memory_available = 4; // Available memory in bytes
+  double memory_usage_percent = 5;
+  repeated DiskUsage disk_usage = 6;
+  repeated NetworkStats network_stats = 7;
+  int32 process_count = 8;
+  double load_average_1m = 9;
+  double load_average_5m = 10;
+  double load_average_15m = 11;
+}
+
+// DiskUsage represents disk usage for a mount point
+message DiskUsage {
+  string mount_point = 1;
+  string filesystem = 2;
+  int64 total = 3;       // Total space in bytes
+  int64 used = 4;        // Used space in bytes
+  int64 available = 5;   // Available space in bytes
+  double usage_percent = 6;
+}
+
+// NetworkStats represents network statistics for an interface
+message NetworkStats {
+  string interface_name = 1;
+  int64 bytes_sent = 2;
+  int64 bytes_recv = 3;
+  int64 packets_sent = 4;
+  int64 packets_recv = 5;
+  int64 errors_in = 6;
+  int64 errors_out = 7;
+}
+
+// DynamicMetricsResponse acknowledges metrics report
+message DynamicMetricsResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// FileChunk represents a chunk of file data
+message FileChunk {
+  string agent_id = 1;
+  string token = 2;
+  string file_path = 3;      // Relative or absolute file path
+  int64 total_size = 4;      // Total file size
+  int64 offset = 5;          // Offset of this chunk
+  bytes data = 6;            // Chunk data
+  string checksum = 7;       // MD5 checksum of entire file (sent in last chunk)
+  bool is_last_chunk = 8;    // Indicates last chunk
+}
+
+// FileTransferResponse indicates file transfer result
+message FileTransferResponse {
+  bool success = 1;
+  string message = 2;
+  string file_id = 3;        // Server-assigned file ID
+  int64 bytes_received = 4;  // Total bytes received
+}
+
+// FileDownloadRequest requests a file download
+message FileDownloadRequest {
+  string agent_id = 1;
+  string token = 2;
+  string file_id = 3;        // File ID to download
+}
+
+// CommandRequest contains command execution request
+message CommandRequest {
+  string agent_id = 1;
+  string token = 2;
+  string command = 3;              // Command to execute
+  repeated string args = 4;        // Command arguments
+  string working_dir = 5;          // Working directory
+  map<string, string> env = 6;     // Environment variables
+  int32 timeout_seconds = 7;       // Execution timeout
+  string execution_id = 8;         // Unique execution ID for tracking
+}
+
+// CommandMessage is used for bidirectional streaming between server and agent
+message CommandMessage {
+  string type = 1;          // Message type: "command", "completion", "heartbeat"
+  
+  // For type="command": Server sends command to agent
+  CommandRequest command_request = 2;
+  
+  // For type="completion": Agent reports completion to server
+  CommandCompletion command_completion = 3;
+}
+
+// CommandCompletion contains command execution completion report
+message CommandCompletion {
+  string execution_id = 1;         // Execution ID
+  string status = 2;               // "completed" or "failed"
+  int32 exit_code = 3;             // Process exit code
+  string stdout_preview = 4;       // stdout output (truncated to 10KB)
+  string stderr_preview = 5;       // stderr output (truncated to 10KB)
+  string error_message = 6;        // Error message if execution failed
+  int64 duration_ms = 7;           // Execution duration in milliseconds
+  int64 timestamp = 8;             // Unix timestamp in milliseconds
+}
