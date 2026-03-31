@@ -14,6 +14,7 @@ import (
 	"github.com/dowork-shanqiu/xuannexus-agent/internal/agent/client"
 	"github.com/dowork-shanqiu/xuannexus-agent/internal/agent/collector"
 	"github.com/dowork-shanqiu/xuannexus-agent/internal/agent/config"
+	"github.com/dowork-shanqiu/xuannexus-agent/internal/agent/updater"
 	"github.com/dowork-shanqiu/xuannexus-agent/pkg/installer"
 )
 
@@ -100,6 +101,7 @@ func (p *agentProgram) run() {
 	if err != nil {
 		logger.Fatal("Failed to create gRPC client", zap.Error(err))
 	}
+	grpcClient.SetVersion(Version)
 	if err := grpcClient.Connect(); err != nil {
 		logger.Fatal("Failed to connect to server", zap.Error(err))
 	}
@@ -164,8 +166,29 @@ func (p *agentProgram) run() {
 
 	// ── 启动命令监听器 ────────────────────────────────────────────────────────
 	commandListener := client.NewCommandListener(grpcClient, cfg.Registration.AgentID, cfg.Registration.Token, logger, systemCollector)
+
+	// ── 初始化自升级模块 ──────────────────────────────────────────────────────
+	onRestart := func() {
+		logger.Info("升级完成，触发不停机重启...")
+		updater.RestartSelf(logger)
+	}
+	agentUpdater := updater.NewUpdater(cfg, logger, Version, onRestart)
+	upgradeScheduler := updater.NewScheduler(agentUpdater, cfg, logger)
+
+	// 将升级调度器注入命令监听器，使 server 可以通过 __check_update__ 指令触发升级
+	commandListener.SetUpdateChecker(upgradeScheduler)
+
 	go commandListener.Start(ctx)
 	logger.Info("Command listener started")
+
+	// ── 启动自动升级调度器 ────────────────────────────────────────────────────
+	if err := upgradeScheduler.Start(ctx); err != nil {
+		logger.Error("Failed to start upgrade scheduler", zap.Error(err))
+	} else {
+		logger.Info("Upgrade scheduler started",
+			zap.Bool("enabled", cfg.Upgrade.Enabled),
+			zap.String("schedule", cfg.Upgrade.Schedule))
+	}
 
 	// ── 心跳与指标上报循环 ────────────────────────────────────────────────────
 	heartbeatTicker := time.NewTicker(cfg.Heartbeat.Interval)
@@ -205,6 +228,7 @@ func (p *agentProgram) run() {
 
 		case <-ctx.Done():
 			logger.Info("Shutting down agent...")
+			upgradeScheduler.Stop()
 			commandListener.Stop()
 			reconnectMgr.Stop()
 			logger.Info("Agent stopped")

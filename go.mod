@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/kardianos/service v1.2.4
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/yusufpapurcu/wmi v1.2.4
 	go.uber.org/zap v1.27.1
