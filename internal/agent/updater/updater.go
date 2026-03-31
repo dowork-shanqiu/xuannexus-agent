@@ -160,6 +160,7 @@ func (u *Updater) checkLatestVersionFromGitHub(ctx context.Context, binaryName s
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// Best-effort read of response body for diagnostic message; error is non-critical
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		return "", "", fmt.Errorf("GitHub API 返回非 200 状态码: %d, body: %s", resp.StatusCode, string(body))
 	}
@@ -201,6 +202,7 @@ func (u *Updater) checkLatestVersionFromMirror(ctx context.Context, binaryName s
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// Best-effort read of response body for diagnostic message; error is non-critical
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		return "", "", fmt.Errorf("镜像返回非 200 状态码: %d, body: %s", resp.StatusCode, string(body))
 	}
@@ -353,8 +355,6 @@ func isNewerVersion(current, latest string) bool {
 func parseVersionParts(v string) [3]int {
 	v = normalizeVersion(v)
 	var parts [3]int
-	n, _ := fmt.Sscanf(v, "%d.%d.%d", &parts[0], &parts[1], &parts[2])
-	// 如果解析失败，至少解析了部分
-	_ = n
+	fmt.Sscanf(v, "%d.%d.%d", &parts[0], &parts[1], &parts[2])
 	return parts
 }
