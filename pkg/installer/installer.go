@@ -26,6 +26,10 @@ type ServiceOptions struct {
 	UserName string
 	// GroupName 以指定用户组身份运行（仅 Linux/macOS）；留空时使用默认用户组
 	GroupName string
+	// Restart 服务重启策略（如 "on-failure"、"always" 等，具体值依赖于平台和服务管理器）；留空使用默认重启策略
+	Restart string
+	// EnvVars 需要注入到服务环境中的环境变量（仅 Linux/macOS）；键值对形式，如 map[string]string{"ENV_VAR1": "value1", "ENV_VAR2": "value2"}
+	EnvVars map[string]string
 }
 
 // Install 将可执行程序注册为系统服务，并尝试立即启动。

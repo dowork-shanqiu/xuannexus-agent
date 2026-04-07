@@ -5,17 +5,18 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/kardianos/service"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"github.com/dowork-shanqiu/xuannexus-agent/internal/agent/client"
 	"github.com/dowork-shanqiu/xuannexus-agent/internal/agent/collector"
 	"github.com/dowork-shanqiu/xuannexus-agent/internal/agent/config"
 	"github.com/dowork-shanqiu/xuannexus-agent/internal/agent/updater"
 	"github.com/dowork-shanqiu/xuannexus-agent/pkg/installer"
+	"github.com/kardianos/service"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -63,7 +64,7 @@ func (p *agentProgram) run() {
 	// ── 确保配置文件存在 ──────────────────────────────────────────────────────
 	created, cfgErr := config.EnsureConfigFile(p.configFilePath)
 	if cfgErr != nil {
-		fmt.Fprintf(os.Stderr, "初始化配置文件失败: %v\n", cfgErr)
+		_, _ = fmt.Fprintf(os.Stderr, "初始化配置文件失败: %v\n", cfgErr)
 		return
 	}
 	if created {
@@ -261,7 +262,7 @@ func main() {
 		if *doInstall {
 			created, cfgErr := config.EnsureConfigFile(cfgPath)
 			if cfgErr != nil {
-				fmt.Fprintf(os.Stderr, "初始化配置文件失败: %v\n", cfgErr)
+				_, _ = fmt.Fprintf(os.Stderr, "初始化配置文件失败: %v\n", cfgErr)
 				os.Exit(1)
 			}
 			if created {
@@ -278,21 +279,25 @@ func main() {
 				os.Exit(0)
 			}
 
+			exePath, _ := os.Executable()
 			opts := installer.ServiceOptions{
 				Name:        "xuannexus-agent",
 				DisplayName: "XuanNexus Agent",
 				Description: "XuanNexus 主机管理 Agent 服务",
-				Args:        []string{"-config", cfgPath},
+				Args:        []string{"--config", cfgPath},
 				UserName:    *serviceUser,
 				GroupName:   *serviceGroup,
+				Restart:     "on-failure",
+				WorkingDir:  filepath.Dir(exePath),
+				EnvVars:     map[string]string{"GIN_MODE": "release"},
 			}
 			if err := installer.Install(opts); err != nil {
-				fmt.Fprintf(os.Stderr, "安装失败: %v\n", err)
+				_, _ = fmt.Fprintf(os.Stderr, "安装失败: %v\n", err)
 				os.Exit(1)
 			}
 		} else {
 			if err := installer.Uninstall("xuannexus-agent"); err != nil {
-				fmt.Fprintf(os.Stderr, "卸载失败: %v\n", err)
+				_, _ = fmt.Fprintf(os.Stderr, "卸载失败: %v\n", err)
 				os.Exit(1)
 			}
 		}
@@ -312,12 +317,12 @@ func main() {
 
 	svc, err := service.New(prg, svcConfig)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "创建服务失败: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "创建服务失败: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := svc.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "服务运行失败: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "服务运行失败: %v\n", err)
 		os.Exit(1)
 	}
 }

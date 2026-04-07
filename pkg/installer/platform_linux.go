@@ -22,9 +22,9 @@ func applyPlatformOptions(cfg *service.Config, opts ServiceOptions) {
 // 该模板与 kardianos/service 内置模板保持一致，仅在 User= 行下方插入可选的 Group= 行。
 const linuxSystemdTemplate = `[Unit]
 Description={{.Description}}
-ConditionFileIsExecutable={{.Path|cmdEscape}}
-{{range $i, $dep := .Dependencies}}
-{{$dep}} {{end}}
+Documentation=https://xn.codeyet.com
+After=network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
 
 [Service]
 StartLimitInterval=5
@@ -39,12 +39,15 @@ ExecStart={{.Path|cmdEscape}}{{range .Arguments}} {{.|cmd}}{{end}}
 {{if and .LogOutput .HasOutputFileSupport -}}
 StandardOutput=file:{{.LogDirectory}}/{{.Name}}.out
 StandardError=file:{{.LogDirectory}}/{{.Name}}.err
+{{else}}
+StandardOutput=journal
+StandardError=journal
 {{- end}}
 {{if gt .LimitNOFILE -1 }}LimitNOFILE={{.LimitNOFILE}}{{end}}
 {{if .Restart}}Restart={{.Restart}}{{end}}
 {{if .SuccessExitStatus}}SuccessExitStatus={{.SuccessExitStatus}}{{end}}
 RestartSec=120
-EnvironmentFile=-/etc/sysconfig/{{.Name}}
+# EnvironmentFile=-/etc/sysconfig/{{.Name}}
 
 {{range $k, $v := .EnvVars -}}
 Environment={{$k}}={{$v}}
