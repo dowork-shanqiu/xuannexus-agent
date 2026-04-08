@@ -182,18 +182,30 @@ func (u *Updater) checkLatestVersionFromGitHub(ctx context.Context, binaryName s
 	return "", "", fmt.Errorf("未找到适配当前平台的二进制文件: %s", binaryName)
 }
 
-// checkLatestVersionFromMirror 从镜像获取最新版本
-// 镜像需要提供一个 latest.json 文件，格式与 GitHub Release API 的 /latest 端点兼容
+// checkLatestVersionFromMirror 通过镜像代理访问 GitHub Release API 获取最新版本。
+// 镜像代理模式：在真实 GitHub 地址前拼接镜像地址，例如：
+//
+//	版本检测：{mirror_url}/https://api.github.com/repos/{repo}/releases/latest
+//	文件下载：{mirror_url}/https://github.com/{repo}/releases/download/{tag}/{binary}
 func (u *Updater) checkLatestVersionFromMirror(ctx context.Context, binaryName string) (string, string, error) {
 	mirrorURL := strings.TrimRight(u.cfg.Upgrade.MirrorURL, "/")
 
-	// 从镜像获取最新版本信息
-	latestURL := mirrorURL + "/latest.json"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, latestURL, nil)
+	repo := u.cfg.Upgrade.GithubRepo
+	if repo == "" {
+		repo = "dowork-shanqiu/xuannexus-agent"
+	}
+
+	// 通过镜像代理访问 GitHub Release API
+	githubAPIURL := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
+	proxyURL := mirrorURL + "/" + githubAPIURL
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxyURL, nil)
 	if err != nil {
 		return "", "", fmt.Errorf("创建镜像请求失败: %w", err)
 	}
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "xuannexus-agent-updater")
+	u.applyMirrorHeaders(req)
 
 	resp, err := u.httpClient.Do(req)
 	if err != nil {
@@ -214,10 +226,23 @@ func (u *Updater) checkLatestVersionFromMirror(ctx context.Context, binaryName s
 
 	latestVersion := normalizeVersion(release.TagName)
 
-	// 构建下载 URL：{mirror_url}/{tag}/{binary_name}
-	downloadURL := fmt.Sprintf("%s/%s/%s", mirrorURL, release.TagName, binaryName)
+	// 查找匹配当前平台的 asset，下载 URL 通过镜像代理访问
+	for _, asset := range release.Assets {
+		if asset.Name == binaryName {
+			// 下载 URL：{mirror_url}/{browser_download_url}
+			downloadURL := mirrorURL + "/" + asset.BrowserDownloadURL
+			return latestVersion, downloadURL, nil
+		}
+	}
 
-	return latestVersion, downloadURL, nil
+	return "", "", fmt.Errorf("未找到适配当前平台的二进制文件: %s", binaryName)
+}
+
+// applyMirrorHeaders 将配置的镜像认证请求头添加到请求中
+func (u *Updater) applyMirrorHeaders(req *http.Request) {
+	for key, value := range u.cfg.Upgrade.MirrorHeaders {
+		req.Header.Set(key, value)
+	}
 }
 
 // downloadBinary 下载新版本二进制文件到临时路径
@@ -227,6 +252,11 @@ func (u *Updater) downloadBinary(ctx context.Context, downloadURL string) (strin
 		return "", fmt.Errorf("创建下载请求失败: %w", err)
 	}
 	req.Header.Set("User-Agent", "xuannexus-agent-updater")
+
+	// 如果配置了镜像，添加认证请求头
+	if u.cfg.Upgrade.MirrorURL != "" {
+		u.applyMirrorHeaders(req)
+	}
 
 	resp, err := u.httpClient.Do(req)
 	if err != nil {

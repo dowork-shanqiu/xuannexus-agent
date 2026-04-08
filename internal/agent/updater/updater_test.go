@@ -98,7 +98,7 @@ func TestCheckLatestVersionFromGitHub(t *testing.T) {
 		Assets: []githubAsset{
 			{
 				Name:               buildBinaryName(),
-				BrowserDownloadURL: "https://example.com/download/v2.0.0/" + buildBinaryName(),
+				BrowserDownloadURL: "https://github.com/test/repo/releases/download/v2.0.0/" + buildBinaryName(),
 			},
 		},
 	}
@@ -139,26 +139,30 @@ func TestCheckLatestVersionFromGitHub(t *testing.T) {
 
 func TestCheckLatestVersionFromMirror(t *testing.T) {
 	binaryName := buildBinaryName()
+	browserDownloadURL := "https://github.com/test/repo/releases/download/v3.1.0/" + binaryName
 	release := githubRelease{
 		TagName: "v3.1.0",
-		Assets:  []githubAsset{}, // Mirror doesn't need assets
+		Assets: []githubAsset{
+			{
+				Name:               binaryName,
+				BrowserDownloadURL: browserDownloadURL,
+			},
+		},
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/latest.json" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(release)
-		} else {
-			w.WriteHeader(http.StatusNotFound)
-		}
+		// 镜像代理将真实 GitHub URL 拼接在镜像地址后，接受任意路径
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(release)
 	}))
 	defer server.Close()
 
 	logger, _ := zap.NewDevelopment()
 	cfg := &config.Config{
 		Upgrade: config.UpgradeConfig{
-			Enabled:   true,
-			MirrorURL: server.URL,
+			Enabled:    true,
+			MirrorURL:  server.URL,
+			GithubRepo: "test/repo",
 		},
 	}
 
@@ -174,9 +178,99 @@ func TestCheckLatestVersionFromMirror(t *testing.T) {
 		t.Errorf("version = %q, want %q", version, "3.1.0")
 	}
 
-	expectedURL := server.URL + "/v3.1.0/" + binaryName
+	expectedURL := server.URL + "/" + browserDownloadURL
 	if downloadURL != expectedURL {
 		t.Errorf("downloadURL = %q, want %q", downloadURL, expectedURL)
+	}
+}
+
+func TestCheckLatestVersionFromMirror_WithHeaders(t *testing.T) {
+	binaryName := buildBinaryName()
+	browserDownloadURL := "https://github.com/test/repo/releases/download/v4.0.0/" + binaryName
+	release := githubRelease{
+		TagName: "v4.0.0",
+		Assets: []githubAsset{
+			{
+				Name:               binaryName,
+				BrowserDownloadURL: browserDownloadURL,
+			},
+		},
+	}
+
+	var receivedToken string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedToken = r.Header.Get("X-XN-Token")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(release)
+	}))
+	defer server.Close()
+
+	logger, _ := zap.NewDevelopment()
+	cfg := &config.Config{
+		Upgrade: config.UpgradeConfig{
+			Enabled:    true,
+			MirrorURL:  server.URL,
+			GithubRepo: "test/repo",
+			MirrorHeaders: map[string]string{
+				"X-XN-Token": "test-secret",
+			},
+		},
+	}
+
+	u := NewUpdater(cfg, logger, "1.0.0", nil)
+
+	ctx := context.Background()
+	_, _, err := u.checkLatestVersionFromMirror(ctx, binaryName)
+	if err != nil {
+		t.Fatalf("checkLatestVersionFromMirror() error: %v", err)
+	}
+
+	if receivedToken != "test-secret" {
+		t.Errorf("X-XN-Token header = %q, want %q", receivedToken, "test-secret")
+	}
+}
+
+func TestCheckLatestVersionFromMirror_ProxyURL(t *testing.T) {
+	binaryName := buildBinaryName()
+	release := githubRelease{
+		TagName: "v5.0.0",
+		Assets: []githubAsset{
+			{
+				Name:               binaryName,
+				BrowserDownloadURL: "https://github.com/test/repo/releases/download/v5.0.0/" + binaryName,
+			},
+		},
+	}
+
+	var receivedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(release)
+	}))
+	defer server.Close()
+
+	logger, _ := zap.NewDevelopment()
+	cfg := &config.Config{
+		Upgrade: config.UpgradeConfig{
+			Enabled:    true,
+			MirrorURL:  server.URL,
+			GithubRepo: "test/repo",
+		},
+	}
+
+	u := NewUpdater(cfg, logger, "1.0.0", nil)
+
+	ctx := context.Background()
+	_, _, err := u.checkLatestVersionFromMirror(ctx, binaryName)
+	if err != nil {
+		t.Fatalf("checkLatestVersionFromMirror() error: %v", err)
+	}
+
+	// 验证请求路径为代理 GitHub API URL 的形式
+	expectedPath := "/https://api.github.com/repos/test/repo/releases/latest"
+	if receivedPath != expectedPath {
+		t.Errorf("request path = %q, want %q", receivedPath, expectedPath)
 	}
 }
 

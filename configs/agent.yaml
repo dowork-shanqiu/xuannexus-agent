@@ -43,7 +43,10 @@ file_transfer:
 upgrade:
   enabled: true                                    # Enable automatic upgrade checking
   schedule: "0 3 * * *"                            # Cron expression for upgrade checks (default: 3 AM daily)
-  mirror_url: ""                                   # Mirror URL for downloading upgrades (leave empty for GitHub Releases)
-                                                   # Users in China can configure a mirror for faster downloads
-                                                   # Mirror directory structure: {mirror_url}/{tag}/xuannexus-agent-{os}-{arch}
+  mirror_url: ""                                   # Mirror URL for downloading upgrades (leave empty for direct GitHub access)
+                                                   # Users in China can configure a proxy mirror for faster downloads
+                                                   # The mirror proxies requests by prepending the mirror URL to the real GitHub URL,
+                                                   # e.g.: https://gh-proxy.example.com
+  mirror_headers: {}                               # HTTP headers for mirror authentication (optional)
+                                                   # e.g.: {"X-XN-Token": "your-token"}
   github_repo: "dowork-shanqiu/xuannexus-agent"    # GitHub repository (owner/repo)

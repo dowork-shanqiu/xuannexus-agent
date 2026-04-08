@@ -78,9 +78,15 @@ func TestScheduler_ValidCron(t *testing.T) {
 }
 
 func TestScheduler_TriggerCheck(t *testing.T) {
+	binaryName := buildBinaryName()
 	release := githubRelease{
 		TagName: "v1.0.0",
-		Assets:  []githubAsset{},
+		Assets: []githubAsset{
+			{
+				Name:               binaryName,
+				BrowserDownloadURL: "https://github.com/test/repo/releases/download/v1.0.0/" + binaryName,
+			},
+		},
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
