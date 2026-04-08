@@ -151,7 +151,7 @@ func TestCheckLatestVersionFromMirror(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 镜像代理将真实 GitHub URL 拼接在镜像地址后，接收任意路径
+		// 镜像代理将真实 GitHub URL 拼接在镜像地址后，接受任意路径
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(release)
 	}))
